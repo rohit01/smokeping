@@ -1,0 +1,7 @@
+*** Slaves ***
+secrets=/etc/smokeping/slave-secrets
+
++localhost
+display_name=localhost
+color=00ff00
+

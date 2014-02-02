@@ -1,0 +1,176 @@
+#!/bin/bash
+#
+# Script to install smokeping configurations
+# Author: Rohit - @rohit01
+#
+
+SCRIPT_DIR=`dirname $0`
+PROGNAME=`basename $0`
+CONFIG_DIR='configurations'
+SLAVE_LIST_FILE='slave_list.conf'
+COLORS_FILE='colors.conf'
+SECRET_KEY_FILE='slavesecrets.conf'
+SERVER_GROUP_DIRNAME='server_group_list'
+
+
+### GENERATE THESE FILES ###
+G_SLAVE_SECRETS="${SCRIPT_DIR}/master/slave-secrets"
+G_SLAVES="${SCRIPT_DIR}/master/Slaves"
+G_TARGETS="${SCRIPT_DIR}/master/Targets"
+
+parse_simple_file() {
+    cat "$1" | grep -v -e "^\s*#.*$" -e "^\s*$" | tr "\n" " " | tr -s " " | sed 's/ *$//'
+}
+
+
+parse_server_group_file() {
+    slaves=''
+    title=''
+    ip_list=''
+    (cat "$1" | grep -v -e "^\s*#.*$" -e "^\s*$"; echo "EOF") | while read line; do
+        line="$(echo "${line}" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')"
+        if echo "${line}" | grep -i "^slaves=" >/dev/null; then
+            if [ "X${slaves}" = "X" ]; then
+                slaves="$(echo ${line} | cut -d '=' -f 2)"
+            else
+                echo "Parsing error: Slaves specified twice in file: '$1'"
+                exit 1
+            fi
+        elif echo "${line}" | grep -i "^title=" >/dev/null; then
+            if [ "X${title}" = "X" ]; then
+                title="$(echo ${line} | cut -d '=' -f 2)"
+            else
+                echo "Parsing error: Title specified twice in file: '$1'"
+                exit 1
+            fi
+        elif echo "${line}" | grep -i "^EOF$" >/dev/null; then
+            for slave_name in ${slaves}; do
+                if echo ${slave_list} | grep -v ${slave_name} >/dev/null; then
+                    echo "Slave: ${slave_name} not defined in slave_list.conf"
+                    exit 1
+                fi
+            done
+            echo "${title}"
+            echo "${slaves}"
+            echo "${ip_list}"
+        else
+            ip_list="${ip_list}${line} "
+        fi
+    done
+}
+
+
+
+find_server_group_list() {
+    find "${SCRIPT_DIR}/${CONFIG_DIR}/${SERVER_GROUP_DIRNAME}" -type f
+}
+
+
+extract_secret_key() {
+    cat "${SCRIPT_DIR}/${SECRET_KEY_FILE}" | head -n 1 | sed 's/^\s*\(.*\)\s*/\1/'
+}
+
+
+generate_slave_secrets() {
+    secret_key="$(extract_secret_key)"
+
+    for hostname in ${slave_list}; do
+        echo "${hostname}:${secret_key}"
+    done
+}
+
+
+generate_slaves_colors() {
+    echo "*** Slaves ***"
+    echo "secrets=/etc/smokeping/slave-secrets"
+    echo ""
+
+    slave_list="$(echo ${slave_list} | tr -s ' ' | sed 's/ *$//' | sed 's/^ *//')"
+    while [ `echo ${color_list} | wc -w` -lt `echo ${slave_list} | wc -w` ]
+    do
+        color_list="${color_list} ${color_list}"
+    done
+    color_list="$(echo ${color_list} | tr -s ' ' | sed 's/ *$//' | sed 's/^ *//')"
+
+    for hostname in ${slave_list}; do
+        color="$(echo ${color_list} | cut -d ' ' -f 1)"
+        color_list="${color_list/${color} /}"
+        echo "+${hostname}"
+        echo "display_name=${hostname}"
+        echo "color=${color}"
+        echo ""
+    done
+}
+
+
+generate_targets() {
+    echo "*** Targets ***"
+    echo ""
+    echo "probe = FPing"
+    echo ""
+    echo "menu = MTR Checks"
+    echo "title = DNS Server Network Latency Grapher"
+    echo "remark = Master SmokePing Server"
+    echo ""
+    echo ""
+    find_server_group_list | while read server_group_filename; do
+        server_group_name=$(basename "${server_group_filename}")
+        server_group_name=${server_group_name/.conf/}
+        server_group_name=$(echo ${server_group_name} | tr " " "_")
+
+        title=$(parse_server_group_file "${server_group_filename}" | head -n 1 | tail -n 1)
+        slaves=$(parse_server_group_file "${server_group_filename}" | head -n 2 | tail -n 1)
+        server_group_ip_list=$(parse_server_group_file "${server_group_filename}" | head -n 3 | tail -n 1)
+
+        echo "+ ${server_group_name}"
+        echo "menu = ${server_group_name}"
+        if [ "X${title}" = "X" ]; then
+            echo "title = ${server_group_name} RTP Servers"
+        else
+            echo "title = ${title}"
+        fi
+        echo ""
+
+        for server_group_ip in ${server_group_ip_list}; do
+            if echo "${server_group_ip}" | grep ":" >/dev/null; then
+                name="$(echo "${server_group_ip}" | cut -d ':' -f 1)"
+                server_group_ip="$(echo "${server_group_ip}" | cut -d ':' -f 2)"
+            else
+                name="${server_group_name}_$(echo ${server_group_ip} | tr '.' '_')"
+            fi
+            echo "++ ${name}"
+            echo "title = ${name}"
+            echo "host = ${server_group_ip}"
+            if [ "X${slaves}" = "X" ]; then
+                echo "slaves = ${slave_list}"
+            else
+                echo "slaves = ${slaves}"
+            fi
+            echo ""
+        done
+    done
+}
+
+################################################################################
+###################### Generate all files ######################################
+################################################################################
+
+
+slave_list=$(parse_simple_file "${SCRIPT_DIR}/${CONFIG_DIR}/${SLAVE_LIST_FILE}")
+color_list=$(parse_simple_file "${SCRIPT_DIR}/${CONFIG_DIR}/${COLORS_FILE}")
+
+echo "####  Generating file: '${G_SLAVE_SECRETS}'  ####"
+echo ""
+
+generate_slave_secrets > "${G_SLAVE_SECRETS}"
+chmod 640 "${G_SLAVE_SECRETS}"
+
+echo "####  Generating file: '${G_SLAVES}'  ####"
+echo ""
+
+generate_slaves_colors > "${G_SLAVES}"
+
+echo "####  Generating file: '${G_TARGETS}'  ####"
+echo ""
+
+generate_targets > "${G_TARGETS}"

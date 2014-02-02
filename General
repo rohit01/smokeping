@@ -1,0 +1,19 @@
+*** General ***
+
+@include /etc/smokeping/config.d/pathnames
+
+# Please edit this to suit your installation
+owner    = Rohit Gupta
+contact  = admin@rohit.io
+
+cgiurl   = http://smoke.rohit.io/cgi-bin/smokeping.cgi
+
+# mailhost = smtp.mailhost.abc
+mailhost = smtp.mailgun.org
+
+# specify this to get syslog logging
+syslogfacility = local0
+
+# each probe is now run in its own process
+# disable this to revert to the old behaviour
+# concurrentprobes = no

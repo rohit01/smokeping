@@ -1,0 +1,37 @@
+*** Targets ***
+
+probe = FPing
+
+menu = MTR Checks
+title = DNS Server Network Latency Grapher
+remark = Master SmokePing Server
+
+
++ google_dns_servers
+menu = google_dns_servers
+title = Google DNS Servers
+
+++ google_dns_servers_8_8_8_8
+title = google_dns_servers_8_8_8_8
+host = 8.8.8.8
+slaves = localhost
+
+++ google_dns_servers_8_8_4_4
+title = google_dns_servers_8_8_4_4
+host = 8.8.4.4
+slaves = localhost
+
++ opendns_servers
+menu = opendns_servers
+title = OpenDNS servers
+
+++ opendns_servers_208_67_222_222
+title = opendns_servers_208_67_222_222
+host = 208.67.222.222
+slaves = localhost
+
+++ opendns_servers_208_67_220_220
+title = opendns_servers_208_67_220_220
+host = 208.67.220.220
+slaves = localhost
+
